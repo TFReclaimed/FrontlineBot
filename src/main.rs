@@ -64,6 +64,7 @@ async fn update_bot_activity(ctx: &Context, client: &ReqwestClient, url: &str) {
         Err(e) => {
             error!("Error fetching server stats: {:?}", e);
             ctx.set_activity(Some(ActivityData::custom("Server unreachable")));
+            ctx.dnd();
             return;
         }
     };
@@ -73,6 +74,7 @@ async fn update_bot_activity(ctx: &Context, client: &ReqwestClient, url: &str) {
         Err(e) => {
             error!("Error parsing server stats: {:?}", e);
             ctx.set_activity(Some(ActivityData::custom("Server unreachable")));
+            ctx.dnd();
             return;
         }
     };
@@ -80,6 +82,7 @@ async fn update_bot_activity(ctx: &Context, client: &ReqwestClient, url: &str) {
     let formatted_activity = format!("{} online | {} active battles",
                                      stats.online_players, stats.active_battles);
     ctx.set_activity(Some(ActivityData::custom(formatted_activity)));
+    ctx.online();
 }
 
 #[tokio::main]
