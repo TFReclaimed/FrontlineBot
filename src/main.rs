@@ -63,6 +63,7 @@ async fn update_bot_activity(ctx: &Context, client: &ReqwestClient, url: &str) {
         Ok(res) => res,
         Err(e) => {
             error!("Error fetching server stats: {:?}", e);
+            ctx.set_activity(Some(ActivityData::custom("Server unreachable")));
             return;
         }
     };
@@ -71,6 +72,7 @@ async fn update_bot_activity(ctx: &Context, client: &ReqwestClient, url: &str) {
         Ok(stats) => stats,
         Err(e) => {
             error!("Error parsing server stats: {:?}", e);
+            ctx.set_activity(Some(ActivityData::custom("Server unreachable")));
             return;
         }
     };
