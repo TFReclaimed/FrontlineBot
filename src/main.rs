@@ -1,5 +1,4 @@
 use std::env;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use reqwest::Client as ReqwestClient;
@@ -9,11 +8,13 @@ use serenity::{async_trait, Client};
 use serenity::all::Ready;
 use serenity::gateway::ActivityData;
 use serenity::prelude::*;
+use tokio::sync::watch;
 use tracing::{error, info};
 
 struct Handler {
     stats_url: String,
     is_loop_running: AtomicBool,
+    ctx_tx: watch::Sender<Option<Context>>,
 }
 
 #[async_trait]
@@ -21,10 +22,10 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, data_about_bot: Ready) {
         info!("{} is connected!", data_about_bot.user.name);
 
-        let ctx = Arc::new(ctx);
+        self.ctx_tx.send_modify(|val| *val = Some(ctx.clone()));
 
         if !self.is_loop_running.load(Ordering::Relaxed) {
-            let ctx1 = Arc::clone(&ctx);
+            let ctx_rx = self.ctx_tx.subscribe();
 
             let http_client = ReqwestClient::builder()
                 .timeout(Duration::from_secs(5))
@@ -35,7 +36,15 @@ impl EventHandler for Handler {
 
             tokio::spawn(async move {
                 loop {
-                    update_bot_activity(&ctx1, &http_client, &stats_url).await;
+                    let current_ctx = {
+                        let borrow = ctx_rx.borrow();
+                        borrow.clone()
+                    };
+
+                    if let Some(ctx) = current_ctx {
+                        update_bot_activity(&ctx, &http_client, &stats_url).await;
+                    }
+
                     tokio::time::sleep(Duration::from_secs(10)).await;
                 }
             });
@@ -100,10 +109,13 @@ async fn main() {
     let stats_url = format!("{}/stats.json", base_url.trim_end_matches('/'));
     info!("Using stats URL: {}", stats_url);
 
+    let (ctx_tx, _) = watch::channel(None);
+
     let mut client = Client::builder(&token, GatewayIntents::default())
         .event_handler(Handler {
             stats_url,
             is_loop_running: AtomicBool::new(false),
+            ctx_tx,
         })
         .await
         .expect("Error creating client");
